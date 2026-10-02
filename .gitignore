@@ -1,0 +1,11 @@
+node_modules/
+dist/
+console/dist/
+.env
+.env.*
+!.env.example
+.local/
+coverage/
+*.log
+__pycache__/
+.venv/
