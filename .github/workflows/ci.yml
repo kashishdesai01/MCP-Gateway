@@ -1,0 +1,59 @@
+name: verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run format:check
+      - name: Start isolated CockroachDB
+        run: |
+          docker compose up -d --wait db
+          docker compose exec -T db cockroach sql --insecure --execute 'CREATE DATABASE gateway_test;'
+      - run: npm run test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://root@127.0.0.1:26267/gateway_test?sslmode=disable
+      - run: npx playwright install --with-deps chromium
+      - name: Browser demonstration
+        env:
+          BROWSER_CHANNEL: chromium
+        run: |
+          mkdir -p .local
+          npm run demo > .local/demo.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl -fsS http://localhost:3000/health/ready; then break; fi
+            sleep 1
+          done
+          npm run test:browser
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Real Keycloak PKCE flow
+        env:
+          BROWSER_CHANNEL: chromium
+        run: |
+          curl -fL https://github.com/keycloak/keycloak/releases/download/26.4.2/keycloak-26.4.2.tar.gz -o .local/keycloak.tgz
+          mkdir -p .local/keycloak
+          tar -xzf .local/keycloak.tgz -C .local/keycloak --strip-components=1
+          KEYCLOAK_JAVA_HOME="$JAVA_HOME" npm run demo:oidc > .local/oidc.log 2>&1 &
+          for attempt in {1..90}; do
+            if curl -fsS http://localhost:3100/health/ready; then break; fi
+            sleep 1
+          done
+          set -a
+          source .local/oidc-test.env
+          set +a
+          npm run test:oidc
+      - run: docker build -t scoped-gateway:ci .
+      - if: always()
+        run: docker compose down
