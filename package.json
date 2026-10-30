@@ -55,7 +55,7 @@
     "@types/react-dom": "19.1.9",
     "@vitejs/plugin-react": "5.0.4",
     "eslint": "9.37.0",
-    "fast-check": "4.3.0",
+    "fast-check": "4.10.2",
     "prettier": "3.6.2",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
